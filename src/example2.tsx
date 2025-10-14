@@ -1,6 +1,8 @@
 import * as React from 'react';
-import type { JSXElement } from '@fluentui/react-components';
+import { DatePicker } from '@fluentui/react-datepicker-compat';
 import {
+  Card,
+  CardHeader,
   makeStyles,
   Caption1,
   Text,
@@ -17,41 +19,19 @@ import {
   Skeleton,
   SkeletonItem,
   Theme,
-  Menu,
-  MenuTrigger,
-  MenuList,
-  MenuItem,
-  MenuPopover,
-  MenuDivider,
-  Button,
   Dropdown,
   Option,
   Input,
+  Button,
 } from '@fluentui/react-components';
-import { DatePicker } from '@fluentui/react-datepicker-compat';
-import { Card, CardHeader } from '@fluentui/react-components';
-import {
-  DataGridBody,
-  DataGrid,
-  DataGridRow,
-  DataGridHeader,
-  DataGridCell,
-  DataGridHeaderCell,
-  RowRenderer,
-} from '@fluentui-contrib/react-data-grid-react-window';
+import { DataGridBody, DataGrid, DataGridRow, DataGridHeader, DataGridCell, DataGridHeaderCell, RowRenderer } from '@fluentui-contrib/react-data-grid-react-window';
 import {
   DocumentBulletListMultipleRegular,
   ArrowClockwise20Regular,
   ArrowLeft20Regular,
-  ArrowSortUpRegular,
-  ArrowSortDownRegular,
-  ChevronDownRegular,
-  FilterRegular,
-  DismissRegular,
-  ArrowLeftRegular,
-  ArrowRightRegular,
-  FilterDismissRegular,
 } from '@fluentui/react-icons';
+
+import { HeaderCell } from './HeaderCell';
 
 export interface ContentProps {
   lightTheme: Theme;
@@ -66,17 +46,20 @@ const useStyles = makeStyles({
     display: 'flex',
     gap: '10px',
     width: 'fit-content',
+    flexWrap: 'wrap',
   },
-  box: {
-    flex: '1',
-    padding: '1px',
-    textAlign: 'center',
-  },
+
   main: {
     gap: '10px',
     display: 'flex',
     flexDirection: 'column',
     flexWrap: 'wrap',
+  },
+
+  box: {
+    flex: '1',
+    padding: '1px',
+    textAlign: 'center',
   },
 
   card: {
@@ -337,7 +320,7 @@ type FilterCondition = {
 
 type ColumnFilters = Record<string, FilterCondition | null>;
 
-export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
+export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
   const styles = useStyles();
   const { targetDocument } = useFluent();
   const scrollbarWidth = useScrollbarWidth({ targetDocument });
@@ -796,74 +779,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     },
   };
 
-  // Header cell with menu (filter panel rendered globally)
-  const HeaderCell: React.FC<{ columnId: string; title: string; columnOrder: string[]; setColumnOrder: React.Dispatch<React.SetStateAction<string[]>> }> = ({ columnId, title, columnOrder, setColumnOrder }) => {
-    const idx = columnOrder.indexOf(columnId);
-    const canMoveLeft = idx > 0;
-    const canMoveRight = idx < columnOrder.length - 1;
-    const moveColumn = (dir: -1 | 1) => {
-      const newOrder = [...columnOrder];
-      const swapIdx = idx + dir;
-      [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-      setColumnOrder(newOrder);
-    };
-    return (
-      <div data-column-id={columnId} style={{ width: '100%', height: '100%', display: 'flex' }}>
-        <Menu positioning={{ position: 'below', align: 'start' }}>
-          <MenuTrigger disableButtonEnhancement>
-            <Button
-              appearance="subtle"
-              size="medium"
-              style={{ padding: '6px', width: '100%', height: '100%', justifyContent: 'flex-start', display: 'flex' }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', fontWeight: 'bold', gap: 8, justifyContent: 'flex-start' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>{title}</span>
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: tokens.colorNeutralForeground1 }}>
-                  {sortColumn === columnId && sortDirection === 'asc' && <ArrowSortUpRegular aria-label="Sorted ascending" />}
-                  {sortColumn === columnId && sortDirection === 'desc' && <ArrowSortDownRegular aria-label="Sorted descending" />}
-                  {columnFilters[columnId] && <FilterRegular style={{ color: tokens.colorPaletteBlueForeground2 }} aria-label="Filtered" />}
-                  {!(sortColumn === columnId && sortDirection) && !columnFilters[columnId] && (
-                    <span style={{ width: 16, height: 16, display: 'inline-block' }} />
-                  )}
-                  <ChevronDownRegular />
-                </span>
-              </span>
-            </Button>
-          </MenuTrigger>
-          <MenuPopover style={{ zIndex: 1000, background: 'rgba(255,255,255,0.95)' }}>
-            <MenuList>
-              <MenuItem icon={<ArrowSortUpRegular />} onClick={() => handleColumnAction(columnId, 'sort-asc')} disabled={sortColumn === columnId && sortDirection === 'asc'}>A to Z</MenuItem>
-              <MenuItem icon={<ArrowSortDownRegular />} onClick={() => handleColumnAction(columnId, 'sort-desc')} disabled={sortColumn === columnId && sortDirection === 'desc'}>Z to A</MenuItem>
-              {sortColumn === columnId && sortDirection && (
-                <MenuItem icon={<DismissRegular />} onClick={() => handleColumnAction(columnId, 'clear-sort')}>Clear Sort</MenuItem>
-              )}
-              <MenuDivider />
-              <MenuItem icon={<FilterRegular />} onClick={() => handleColumnAction(columnId, 'filter')}>Filter</MenuItem>
-              {columnFilters[columnId] && (
-                <MenuItem
-                  icon={<FilterDismissRegular />}
-                  onClick={() => {
-                    setColumnFilters(prev => ({ ...prev, [columnId]: null }));
-                  }}
-                >
-                  Clear Filter
-                </MenuItem>
-              )}
-              <MenuDivider />
-              {canMoveLeft && (
-                <MenuItem icon={<ArrowLeftRegular />} onClick={() => moveColumn(-1)}>Move Left</MenuItem>
-              )}
-              {canMoveRight && (
-                <MenuItem icon={<ArrowRightRegular />} onClick={() => moveColumn(1)}>Move Right</MenuItem>
-              )}
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-      </div>
-    );
-  };
+
 
   // DebugMenu removed after verification
 
@@ -1030,7 +946,18 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
         compare: columnConfig[colId].compare,
         renderHeaderCell: () => (
           <DataGridHeaderCell className={styles.gridCell}>
-            <HeaderCell columnId={colId} title={columnConfig[colId].title} columnOrder={columnOrder} setColumnOrder={setColumnOrder} />
+            <HeaderCell
+              columnId={colId}
+              title={columnConfig[colId].title}
+              columnOrder={columnOrder}
+              setColumnOrder={setColumnOrder}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              columnFilters={columnFilters}
+              handleColumnAction={handleColumnAction}
+              setColumnFilters={setColumnFilters}
+              tokens={tokens}
+            />
           </DataGridHeaderCell>
         ),
         renderCell: columnConfig[colId].renderCell,
