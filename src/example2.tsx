@@ -750,14 +750,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     estimatedQty: {
       title: 'Estimated Qty',
       compare: (a, b) => a.estimatedQty - b.estimatedQty,
-      renderCell: (item) =>
-        item.estimatedQty === 0 ? (
-          <DataGridCell>{item.estimatedQty}</DataGridCell>
-        ) : (
-          <DataGridCell>
-            <div>{item.estimatedQty}</div>
-          </DataGridCell>
-        ),
+      renderCell: (item) => <DataGridCell>{item.estimatedQty}</DataGridCell>,
     },
     estimatedCost: {
       title: 'Estimated Cost',
@@ -782,7 +775,19 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     lineStatus: {
       title: 'Line Status',
       compare: (a, b) => a.lineStatus.localeCompare(b.lineStatus),
-      renderCell: (item) => <DataGridCell>{item.lineStatus}</DataGridCell>,
+      renderCell: (item) => {
+        let bg = '', color = '';
+        if (item.lineStatus === 'Committed') {
+          bg = '#ffe066'; color = '#333';
+        } else if (item.lineStatus === 'Estimate') {
+          bg = '#ffb347'; color = '#333';
+        } else if (item.lineStatus === 'Used') {
+          bg = '#5cb85c'; color = '#fff';
+        }
+        return (
+          <DataGridCell style={{ background: bg, color, fontWeight: 600, borderRadius: 4 }}>{item.lineStatus}</DataGridCell>
+        );
+      },
     },
     createdOn: {
       title: 'Created On',
@@ -1043,13 +1048,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     boxSizing: 'border-box' as const,
   };
 
-  function getEstimateQtyStyle(qty: number) {
-    if (qty >= 10) {
-      return styles.estimateQuantity;
-    } else {
-      return '';
-    }
-  }
+  // Removed getEstimateQtyStyle and all background coloring for estimatedQty
 
   // Insert DebugMenu in JSX return (search for DataGrid usage below)
 
@@ -1058,21 +1057,11 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
       ({ item, rowId }, style, _, isScrolling) =>
         (
           <DataGridRow<Item> key={rowId} style={style}>
-            {({ renderCell, columnId }) => {
-              const isEstQtyColumn = columnId === 'estimatedQty';
-              const backgroundClass =
-                isEstQtyColumn && !isScrolling
-                  ? getEstimateQtyStyle(item.estimatedQty)
-                  : '';
-              return (
-                <DataGridCell
-                  className={backgroundClass ? styles.estimateQuantity : styles.gridCell}
-                  focusMode="group"
-                >
-                  {isScrolling ? <CellShimmer /> : renderCell(item)}
-                </DataGridCell>
-              );
-            }}
+            {({ renderCell }) => (
+              <DataGridCell className={styles.gridCell} focusMode="group">
+                {isScrolling ? <CellShimmer /> : renderCell(item)}
+              </DataGridCell>
+            )}
           </DataGridRow>
         ),
     []
