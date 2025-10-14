@@ -27,7 +27,7 @@ import {
 } from '@fluentui/react-icons';
 
 import { HeaderCell } from './HeaderCell';
-import { GlobalFilterPanel } from './GlobalFilterPanel';
+import { GlobalFilterPanel, FilterCondition, ColumnFilters } from './GlobalFilterPanel';
 
 export interface ContentProps {
   lightTheme: Theme;
@@ -241,80 +241,9 @@ const CellShimmer = React.memo(function CellShimmer() {
 
 // Removed legacy renderRow1 with inline minWidth in favor of column sizing options
 
-// Filter and sort types
-type FilterOperator =
-  | 'equals'
-  | 'does-not-equal'
-  | 'contains'
-  | 'does-not-contain'
-  | 'begins-with'
-  | 'does-not-begin-with'
-  | 'ends-with'
-  | 'does-not-end-with'
-  | 'contains-data'
-  | 'does-not-contain-data'
-  | 'greater-than'
-  | 'greater-than-or-equal-to'
-  | 'less-than'
-  | 'less-than-or-equal-to'
-  // Date operators
-  | 'on'
-  | 'on-or-after'
-  | 'on-or-before'
-  | 'today'
-  | 'yesterday'
-  | 'tomorrow'
-  | 'this-week'
-  | 'this-month'
-  | 'this-year'
-  | 'this-fiscal-period'
-  | 'this-fiscal-year'
-  | 'next-week'
-  | 'next-7-days'
-  | 'next-month'
-  | 'next-year'
-  | 'next-fiscal-period'
-  | 'next-fiscal-year'
-  | 'next-x-hours'
-  | 'next-x-days'
-  | 'next-x-weeks'
-  | 'next-x-months'
-  | 'next-x-years'
-  | 'next-x-fiscal-periods'
-  | 'next-x-fiscal-years'
-  | 'last-week'
-  | 'last-7-days'
-  | 'last-month'
-  | 'last-year'
-  | 'last-fiscal-period'
-  | 'last-fiscal-year'
-  | 'last-x-hours'
-  | 'last-x-days'
-  | 'last-x-weeks'
-  | 'last-x-months'
-  | 'last-x-years'
-  | 'last-x-fiscal-periods'
-  | 'last-x-fiscal-years'
-  | 'older-than-x-minutes'
-  | 'older-than-x-hours'
-  | 'older-than-x-days'
-  | 'older-than-x-weeks'
-  | 'older-than-x-months'
-  | 'older-than-x-years'
-  | 'in-fiscal-year'
-  | 'in-fiscal-period'
-  | 'in-fiscal-period-and-year'
-  | 'in-or-after-fiscal-period-and-year'
-  | 'in-or-before-fiscal-period-and-year'
-  | 'contains-data-any-time'
-  | 'does-not-contain-data';
+// FilterOperator and FilterCondition types imported from GlobalFilterPanel
 
-type FilterCondition = {
-  operator: FilterOperator;
-  value: string;
-};
-
-type ColumnFilters = Record<string, FilterCondition | null>;
+// ColumnFilters type imported from GlobalFilterPanel
 
 export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
   const styles = useStyles();

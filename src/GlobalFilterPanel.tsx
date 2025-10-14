@@ -37,12 +37,14 @@ export type FilterOperator =
 
 export interface FilterCondition { operator: FilterOperator; value: string; }
 
+export type ColumnFilters = Record<string, FilterCondition | null>;
+
 export interface GlobalFilterPanelProps {
   openColumnId: string | null;
   anchorRect: DOMRect | null;
   setOpenColumnId: (id: string | null) => void;
-  columnFilters: Record<string, FilterCondition | null>;
-  setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, FilterCondition | null>>>;
+  columnFilters: ColumnFilters;
+  setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFilters>>;
   isDateColumn: (id: string) => boolean;
   isNumericColumn: (id: string) => boolean;
   getOperatorDisplayText: (op: string) => string;
