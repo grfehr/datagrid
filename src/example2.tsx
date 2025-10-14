@@ -48,6 +48,9 @@ import {
   ChevronDownRegular,
   FilterRegular,
   DismissRegular,
+  ArrowLeftRegular,
+  ArrowRightRegular,
+  FilterDismissRegular,
 } from '@fluentui/react-icons';
 
 export interface ContentProps {
@@ -706,8 +709,99 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     return result;
   }, [items, columnFilters, sortColumn, sortDirection]);
 
+  // Column order state and persistence
+  const defaultColumnOrder = [
+    'name',
+    'committedQty',
+    'committedCost',
+    'estimatedQty',
+    'estimatedCost',
+    'usedQty',
+    'usedCost',
+    'billingAmount',
+    'lineStatus',
+    'createdOn',
+  ];
+  const [columnOrder, setColumnOrder] = React.useState<string[]>(() => {
+    const saved = localStorage.getItem('example2GridColumnOrder');
+    return saved ? JSON.parse(saved) : defaultColumnOrder;
+  });
+  React.useEffect(() => {
+    localStorage.setItem('example2GridColumnOrder', JSON.stringify(columnOrder));
+  }, [columnOrder]);
+
+  // Map of columnId to column config
+  const columnConfig: Record<string, { title: string; compare: (a: Item, b: Item) => number; renderCell: (item: Item) => React.ReactNode }> = {
+    name: {
+      title: 'Name',
+      compare: (a, b) => a.name.localeCompare(b.name),
+      renderCell: (item) => <DataGridCell>{item.name}</DataGridCell>,
+    },
+    committedQty: {
+      title: 'Committed Qty',
+      compare: (a, b) => a.committedQty - b.committedQty,
+      renderCell: (item) => <DataGridCell>{item.committedQty}</DataGridCell>,
+    },
+    committedCost: {
+      title: 'Committed Cost',
+      compare: (a, b) => a.committedCost - b.committedCost,
+      renderCell: (item) => <DataGridCell>{item.committedCost}</DataGridCell>,
+    },
+    estimatedQty: {
+      title: 'Estimated Qty',
+      compare: (a, b) => a.estimatedQty - b.estimatedQty,
+      renderCell: (item) =>
+        item.estimatedQty === 0 ? (
+          <DataGridCell>{item.estimatedQty}</DataGridCell>
+        ) : (
+          <DataGridCell>
+            <div>{item.estimatedQty}</div>
+          </DataGridCell>
+        ),
+    },
+    estimatedCost: {
+      title: 'Estimated Cost',
+      compare: (a, b) => a.estimatedCost - b.estimatedCost,
+      renderCell: (item) => <DataGridCell>{item.estimatedCost}</DataGridCell>,
+    },
+    usedQty: {
+      title: 'Used Qty',
+      compare: (a, b) => a.usedQty - b.usedQty,
+      renderCell: (item) => <DataGridCell>{item.usedQty}</DataGridCell>,
+    },
+    usedCost: {
+      title: 'Used Cost',
+      compare: (a, b) => a.usedCost - b.usedCost,
+      renderCell: (item) => <DataGridCell>{item.usedCost}</DataGridCell>,
+    },
+    billingAmount: {
+      title: 'Billing Amount',
+      compare: (a, b) => a.billingAmount - b.billingAmount,
+      renderCell: (item) => <DataGridCell>{item.billingAmount}</DataGridCell>,
+    },
+    lineStatus: {
+      title: 'Line Status',
+      compare: (a, b) => a.lineStatus.localeCompare(b.lineStatus),
+      renderCell: (item) => <DataGridCell>{item.lineStatus}</DataGridCell>,
+    },
+    createdOn: {
+      title: 'Created On',
+      compare: (a, b) => a.createdOn.localeCompare(b.createdOn),
+      renderCell: (item) => <DataGridCell>{item.createdOn}</DataGridCell>,
+    },
+  };
+
   // Header cell with menu (filter panel rendered globally)
-  const HeaderCell: React.FC<{ columnId: string; title: string }> = ({ columnId, title }) => {
+  const HeaderCell: React.FC<{ columnId: string; title: string; columnOrder: string[]; setColumnOrder: React.Dispatch<React.SetStateAction<string[]>> }> = ({ columnId, title, columnOrder, setColumnOrder }) => {
+    const idx = columnOrder.indexOf(columnId);
+    const canMoveLeft = idx > 0;
+    const canMoveRight = idx < columnOrder.length - 1;
+    const moveColumn = (dir: -1 | 1) => {
+      const newOrder = [...columnOrder];
+      const swapIdx = idx + dir;
+      [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+      setColumnOrder(newOrder);
+    };
     return (
       <div data-column-id={columnId} style={{ width: '100%', height: '100%', display: 'flex' }}>
         <Menu positioning={{ position: 'below', align: 'start' }}>
@@ -744,14 +838,20 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
               <MenuItem icon={<FilterRegular />} onClick={() => handleColumnAction(columnId, 'filter')}>Filter</MenuItem>
               {columnFilters[columnId] && (
                 <MenuItem
-                  icon={<FilterRegular />}
+                  icon={<FilterDismissRegular />}
                   onClick={() => {
                     setColumnFilters(prev => ({ ...prev, [columnId]: null }));
-                    // menu closes automatically
                   }}
                 >
                   Clear Filter
                 </MenuItem>
+              )}
+              <MenuDivider />
+              {canMoveLeft && (
+                <MenuItem icon={<ArrowLeftRegular />} onClick={() => moveColumn(-1)}>Move Left</MenuItem>
+              )}
+              {canMoveRight && (
+                <MenuItem icon={<ArrowRightRegular />} onClick={() => moveColumn(1)}>Move Right</MenuItem>
               )}
             </MenuList>
           </MenuPopover>
@@ -918,115 +1018,21 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
   };
 
   // Stable column definitions to prevent width reset during header interaction
-  const columns = React.useMemo(() => [
-    createTableColumn<Item>({
-      columnId: 'name',
-      compare: (a, b) => a.name.localeCompare(b.name),
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="name" title="Name" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.name}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'committedQty',
-      compare: (a, b) => a.committedQty - b.committedQty,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="committedQty" title="Committed Qty" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.committedQty}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'committedCost',
-      compare: (a, b) => a.committedCost - b.committedCost,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="committedCost" title="Committed Cost" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.committedCost}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'estimatedQty',
-      compare: (a, b) => a.estimatedQty - b.estimatedQty,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="estimatedQty" title="Estimated Qty" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) =>
-        item.estimatedQty === 0 ? (
-          <DataGridCell>{item.estimatedQty}</DataGridCell>
-        ) : (
-          <DataGridCell>
-            <div>{item.estimatedQty}</div>
-          </DataGridCell>
+  const columns = React.useMemo(() =>
+    columnOrder.map((colId) =>
+      createTableColumn<Item>({
+        columnId: colId,
+        compare: columnConfig[colId].compare,
+        renderHeaderCell: () => (
+          <DataGridHeaderCell className={styles.gridCell}>
+            <HeaderCell columnId={colId} title={columnConfig[colId].title} columnOrder={columnOrder} setColumnOrder={setColumnOrder} />
+          </DataGridHeaderCell>
         ),
-    }),
-    createTableColumn<Item>({
-      columnId: 'estimatedCost',
-      compare: (a, b) => a.estimatedCost - b.estimatedCost,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="estimatedCost" title="Estimated Cost" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.estimatedCost}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'usedQty',
-      compare: (a, b) => a.usedQty - b.usedQty,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="usedQty" title="Used Qty" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.usedQty}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'usedCost',
-      compare: (a, b) => a.usedCost - b.usedCost,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="usedCost" title="Used Cost" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.usedCost}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'billingAmount',
-      compare: (a, b) => a.billingAmount - b.billingAmount,
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="billingAmount" title="Billing Amount" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.billingAmount}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'lineStatus',
-      compare: (a, b) => a.lineStatus.localeCompare(b.lineStatus),
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="lineStatus" title="Line Status" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.lineStatus}</DataGridCell>,
-    }),
-    createTableColumn<Item>({
-      columnId: 'createdOn',
-      compare: (a, b) => a.createdOn.localeCompare(b.createdOn),
-      renderHeaderCell: () => (
-        <DataGridHeaderCell className={styles.gridCell}>
-          <HeaderCell columnId="createdOn" title="Created On" />
-        </DataGridHeaderCell>
-      ),
-      renderCell: (item) => <DataGridCell>{item.createdOn}</DataGridCell>,
-    }),
-  ], [sortColumn, sortDirection, columnFilters]);
+        renderCell: columnConfig[colId].renderCell,
+      })
+    ),
+    [columnOrder, sortColumn, sortDirection, columnFilters]
+  );
 
   const toolbarStyle = {
     marginBottom: tokens.spacingVerticalL,
