@@ -6,12 +6,11 @@ import {
   Text,
   Label,
   tokens,
-  TableColumnDefinition,
+  TableColumnSizingOptions,
   createTableColumn,
   useFluent,
   useScrollbarWidth,
   FluentProvider,
-  webLightTheme,
   Toolbar,
   ToolbarButton,
   ToolbarDivider,
@@ -25,15 +24,9 @@ import {
   MenuPopover,
   MenuDivider,
   Button,
-  shorthands,
   Dropdown,
   Option,
   Input,
-  TeachingPopover,
-  TeachingPopoverTrigger,
-  TeachingPopoverSurface,
-  TeachingPopoverHeader,
-  TeachingPopoverBody,
 } from '@fluentui/react-components';
 import { DatePicker } from '@fluentui/react-datepicker-compat';
 import { Card, CardHeader } from '@fluentui/react-components';
@@ -112,14 +105,20 @@ const useStyles = makeStyles({
   },
 
   text: { margin: '0' },
+  gridCell: {
+    padding: '0 8px',
+    boxSizing: 'border-box',
+    position: 'relative',
+    overflow: 'visible',
+  },
   estimateQuantity: {
+    padding: '0 8px',
+    boxSizing: 'border-box',
     backgroundColor: 'red',
   },
-  filterOperatorDropdown: {
-    '& [role="listbox"]': {
-      maxHeight: '400px',
-      overflowY: 'auto'
-    }
+  filterOperatorDropdownListBox: {
+    maxHeight: '100px',
+    overflowY: 'auto',
   },
 });
 
@@ -191,6 +190,60 @@ const items = new Array(120)
   .fill(0)
   .map((_, i) => ({ ...baseItems[i % baseItems.length], index: i }));
 
+// Column sizing options applied to all columns instead of inline minWidth styles
+const columnSizingOptions: TableColumnSizingOptions = {
+  name: {
+    minWidth: 175,
+    idealWidth: 200,
+    defaultWidth: 200
+  },
+  committedQty: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  committedCost: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  estimatedQty: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  estimatedCost: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  usedQty: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  usedCost: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  billingAmount: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  lineStatus: {
+    minWidth: 150,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+  createdOn: {
+    minWidth: 175,
+    idealWidth: 175,
+    defaultWidth: 175
+  },
+};
+
 const listProps = { useIsScrolling: true };
 const CellShimmer = React.memo(function CellShimmer() {
   return (
@@ -204,20 +257,7 @@ const CellShimmer = React.memo(function CellShimmer() {
   );
 });
 
-const renderRow1: RowRenderer<Item> = (
-  { item, rowId },
-  style,
-  _,
-  isScrolling
-) => (
-  <DataGridRow<Item> key={rowId} style={style}>
-    {({ renderCell }) => (
-      <DataGridCell style={{ minWidth: '175px' }} focusMode="group">
-        {isScrolling ? <CellShimmer /> : renderCell(item)}
-      </DataGridCell>
-    )}
-  </DataGridRow>
-);
+// Removed legacy renderRow1 with inline minWidth in favor of column sizing options
 
 // Filter and sort types
 type FilterOperator =
@@ -299,11 +339,11 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
   const { targetDocument } = useFluent();
   const scrollbarWidth = useScrollbarWidth({ targetDocument });
 
-  // Track which column's header-menu is open; null = none
-  const [openCol, setOpenCol] = React.useState<string | null>(null);
 
   // Track which filter popover is open
   const [filterPopoverOpen, setFilterPopoverOpen] = React.useState<string | null>(null);
+  // Anchor rect for filter panel (portal positioning)
+  const [filterAnchor, setFilterAnchor] = React.useState<DOMRect | null>(null);
 
   // Filter form state
   const [filterOperator, setFilterOperator] = React.useState('equals');
@@ -333,6 +373,21 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
       setFilterError('');
     }
   }, [filterPopoverOpen, columnFilters]);
+
+  // Capture anchor rect for global filter panel when opening
+  React.useEffect(() => {
+    if (filterPopoverOpen) {
+      const el = targetDocument?.querySelector(`[data-column-id="${filterPopoverOpen}"]`) as HTMLElement | null;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setFilterAnchor(rect);
+      } else {
+        setFilterAnchor(null);
+      }
+    } else {
+      setFilterAnchor(null);
+    }
+  }, [filterPopoverOpen, targetDocument]);
 
   // Persist sort and filter state to localStorage
   React.useEffect(() => {
@@ -373,28 +428,32 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
       // Clear any existing sort and set new sort
       setSortColumn(columnId);
       setSortDirection("asc");
-      setOpenCol(null);
+  // menu auto-closes by Fluent; no state needed
     } else if (action === "sort-desc") {
       // Clear any existing sort and set new sort
       setSortColumn(columnId);
       setSortDirection("desc");
-      setOpenCol(null);
+  // menu auto-closes
     } else if (action === "clear-sort") {
       setSortColumn(null);
       setSortDirection(null);
-      setOpenCol(null);
+  // menu auto-closes
     } else if (action === "filter") {
-      setOpenCol(null);
+  // menu auto-closes
       setFilterPopoverOpen(columnId);
     }
-    console.log(`Action on ${columnId}: ${action}`, { columnId });
   };
 
-  // Apply filtering logic
-  const applyFilter = (value: string, filter: FilterCondition): boolean => {
-    const lowerValue = value.toLowerCase();
-    const lowerFilterValue = filter.value.toLowerCase();
+  // Clean, restored filtering logic
+  const applyFilter = (columnId: string, value: string, filter: FilterCondition): boolean => {
+    const raw = value ?? '';
+    const lowerValue = raw.toLowerCase();
+    const filterVal = filter.value ?? '';
+    const lowerFilterValue = filterVal.toLowerCase();
 
+    const isEmpty = (v: string) => v.trim() === '';
+
+    // Text operators
     switch (filter.operator) {
       case 'equals':
         return lowerValue === lowerFilterValue;
@@ -413,153 +472,114 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
       case 'does-not-end-with':
         return !lowerValue.endsWith(lowerFilterValue);
       case 'contains-data':
-        return value.trim() !== '';
+        return !isEmpty(raw);
       case 'does-not-contain-data':
-        return value.trim() === '';
-      case 'greater-than':
-        const numValue1 = parseFloat(value);
-        const numFilter1 = parseFloat(filter.value);
-        return !isNaN(numValue1) && !isNaN(numFilter1) && numValue1 > numFilter1;
-      case 'greater-than-or-equal-to':
-        const numValue2 = parseFloat(value);
-        const numFilter2 = parseFloat(filter.value);
-        return !isNaN(numValue2) && !isNaN(numFilter2) && numValue2 >= numFilter2;
-      case 'less-than':
-        const numValue3 = parseFloat(value);
-        const numFilter3 = parseFloat(filter.value);
-        return !isNaN(numValue3) && !isNaN(numFilter3) && numValue3 < numFilter3;
-      case 'less-than-or-equal-to':
-        const numValue4 = parseFloat(value);
-        const numFilter4 = parseFloat(filter.value);
-        return !isNaN(numValue4) && !isNaN(numFilter4) && numValue4 <= numFilter4;
-
-      // Date operators
-      case 'on':
-        // Extract date parts from strings more robustly to avoid timezone issues
-        const itemDateStr = value.split(' ')[0]; // Get just the date part (2025-09-09)
-        const filterDateStr = filter.value.split('T')[0]; // Handle both '2025-09-09' and '2025-09-09T00:00:00'
-
-        // Compare the date strings directly for exact matching
-        return itemDateStr === filterDateStr;
-
-      case 'on-or-after':
-        // Extract date parts to avoid timezone issues
-        const itemDateStr2 = value.split(' ')[0]; // Get just the date part
-        const filterDateStr2 = filter.value.split('T')[0];
-
-        // Convert to comparable date objects using local time
-        const itemDateAfter = new Date(itemDateStr2 + 'T00:00:00');
-        const filterDateAfter = new Date(filterDateStr2 + 'T00:00:00');
-
-        if (isNaN(itemDateAfter.getTime()) || isNaN(filterDateAfter.getTime())) {
-          return false;
-        }
-
-        return itemDateAfter.getTime() >= filterDateAfter.getTime();
-
-      case 'on-or-before':
-        // Extract date parts to avoid timezone issues
-        const itemDateStr3 = value.split(' ')[0]; // Get just the date part
-        const filterDateStr3 = filter.value.split('T')[0];
-
-        // Convert to comparable date objects using local time
-        const itemDateBefore = new Date(itemDateStr3 + 'T00:00:00');
-        const filterDateBefore = new Date(filterDateStr3 + 'T00:00:00');
-
-        if (isNaN(itemDateBefore.getTime()) || isNaN(filterDateBefore.getTime())) {
-          return false;
-        }
-
-        return itemDateBefore.getTime() <= filterDateBefore.getTime();
-
-      case 'today':
-        const today = new Date();
-        const todayStr = today.getFullYear() + '-' +
-                        String(today.getMonth() + 1).padStart(2, '0') + '-' +
-                        String(today.getDate()).padStart(2, '0');
-        const itemTodayStr = value.split(' ')[0]; // Get just the date part
-
-        return itemTodayStr === todayStr;
-
-      case 'yesterday':
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const itemDate2 = new Date(value);
-
-        // Check if item date is valid
-        if (isNaN(itemDate2.getTime())) {
-          return false;
-        }
-
-        // Compare only the date parts
-        return itemDate2.getFullYear() === yesterday.getFullYear() &&
-               itemDate2.getMonth() === yesterday.getMonth() &&
-               itemDate2.getDate() === yesterday.getDate();
-
-      case 'tomorrow':
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const itemDate3 = new Date(value);
-
-        // Check if item date is valid
-        if (isNaN(itemDate3.getTime())) {
-          return false;
-        }
-
-        // Compare only the date parts
-        return itemDate3.getFullYear() === tomorrow.getFullYear() &&
-               itemDate3.getMonth() === tomorrow.getMonth() &&
-               itemDate3.getDate() === tomorrow.getDate();
-
-      case 'this-week':
-        const thisWeekStart = new Date();
-        const thisWeekEnd = new Date();
-        thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
-        thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
-        const weekItemDate = new Date(value);
-
-        // Check if item date is valid
-        if (isNaN(weekItemDate.getTime())) {
-          return false;
-        }
-
-        // Create date-only versions for comparison
-        const weekItemDateOnly = new Date(weekItemDate.getFullYear(), weekItemDate.getMonth(), weekItemDate.getDate());
-        const weekStartOnly = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
-        const weekEndOnly = new Date(thisWeekEnd.getFullYear(), thisWeekEnd.getMonth(), thisWeekEnd.getDate());
-
-        return weekItemDateOnly.getTime() >= weekStartOnly.getTime() && weekItemDateOnly.getTime() <= weekEndOnly.getTime();
-
-      case 'this-month':
-        const thisMonth = new Date();
-        const monthItemDate = new Date(value);
-
-        // Check if item date is valid
-        if (isNaN(monthItemDate.getTime())) {
-          return false;
-        }
-
-        return monthItemDate.getMonth() === thisMonth.getMonth() &&
-               monthItemDate.getFullYear() === thisMonth.getFullYear();
-
-      case 'this-year':
-        const thisYear = new Date();
-        const yearItemDate = new Date(value);
-
-        // Check if item date is valid
-        if (isNaN(yearItemDate.getTime())) {
-          return false;
-        }
-
-        return yearItemDate.getFullYear() === thisYear.getFullYear();
-
-      // Add more date cases as needed
+        return isEmpty(raw);
       case 'contains-data-any-time':
-        return value.trim() !== '';
-
-      default:
-        return true;
+        return !isEmpty(raw);
     }
+
+    // Numeric operators (attempt parse)
+  if (isNumericColumn(columnId)) {
+      const numericVal = parseFloat(raw);
+      const numericFilter = parseFloat(filterVal);
+      if (isNaN(numericVal)) return false;
+      switch (filter.operator) {
+        case 'greater-than':
+          return numericVal > numericFilter;
+        case 'greater-than-or-equal-to':
+          return numericVal >= numericFilter;
+        case 'less-than':
+          return numericVal < numericFilter;
+        case 'less-than-or-equal-to':
+          return numericVal <= numericFilter;
+      }
+    }
+
+    // Date handling: we treat the incoming value as 'YYYY-MM-DD ...'
+  if (isDateColumn(columnId)) {
+      const datePart = raw.split(' ')[0];
+      if (!datePart) return false;
+      const itemDate = new Date(datePart + 'T00:00:00');
+      if (isNaN(itemDate.getTime())) return false;
+
+      const makeDateOnly = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const today = makeDateOnly(new Date());
+      const compareItem = makeDateOnly(itemDate);
+
+      const parseFilterDate = () => {
+        if (!filterVal) return null;
+        const base = filterVal.split('T')[0];
+        return new Date(base + 'T00:00:00');
+      };
+
+      switch (filter.operator) {
+        case 'on': {
+          const fd = parseFilterDate();
+            return !!fd && compareItem.getTime() === makeDateOnly(fd).getTime();
+        }
+        case 'on-or-after': {
+          const fd = parseFilterDate();
+          return !!fd && compareItem.getTime() >= makeDateOnly(fd).getTime();
+        }
+        case 'on-or-before': {
+          const fd = parseFilterDate();
+          return !!fd && compareItem.getTime() <= makeDateOnly(fd).getTime();
+        }
+        case 'today':
+          return compareItem.getTime() === today.getTime();
+        case 'yesterday': {
+          const y = new Date(today);
+          y.setDate(y.getDate() - 1);
+          return compareItem.getTime() === y.getTime();
+        }
+        case 'tomorrow': {
+          const t = new Date(today);
+          t.setDate(t.getDate() + 1);
+          return compareItem.getTime() === t.getTime();
+        }
+        case 'this-week': {
+          const start = new Date(today);
+          start.setDate(start.getDate() - start.getDay());
+          const end = new Date(start);
+          end.setDate(start.getDate() + 6);
+          return compareItem.getTime() >= start.getTime() && compareItem.getTime() <= end.getTime();
+        }
+        case 'last-week': {
+          const start = new Date(today);
+          start.setDate(start.getDate() - start.getDay() - 7);
+          const end = new Date(start);
+          end.setDate(start.getDate() + 6);
+          return compareItem.getTime() >= start.getTime() && compareItem.getTime() <= end.getTime();
+        }
+        case 'next-week': {
+          const start = new Date(today);
+          start.setDate(start.getDate() - start.getDay() + 7);
+          const end = new Date(start);
+          end.setDate(start.getDate() + 6);
+          return compareItem.getTime() >= start.getTime() && compareItem.getTime() <= end.getTime();
+        }
+        case 'this-month': {
+          return compareItem.getFullYear() === today.getFullYear() && compareItem.getMonth() === today.getMonth();
+        }
+        case 'last-month': {
+          const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          return compareItem.getFullYear() === prev.getFullYear() && compareItem.getMonth() === prev.getMonth();
+        }
+        case 'next-month': {
+          const nxt = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+          return compareItem.getFullYear() === nxt.getFullYear() && compareItem.getMonth() === nxt.getMonth();
+        }
+        case 'this-year':
+          return compareItem.getFullYear() === today.getFullYear();
+        case 'last-year':
+          return compareItem.getFullYear() === today.getFullYear() - 1;
+        case 'next-year':
+          return compareItem.getFullYear() === today.getFullYear() + 1;
+      }
+    }
+
+    return true; // Fallback
   };
 
   // Helper function to determine if a column contains numeric data
@@ -649,12 +669,12 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
   const filteredAndSortedItems = React.useMemo(() => {
     let result = [...items];
 
-    // Apply filters
-    Object.entries(columnFilters).forEach(([columnId, filter]) => {
-      if (filter) {
+    // Apply each active column filter
+    Object.entries(columnFilters).forEach(([colId, cond]) => {
+      if (cond) {
         result = result.filter(item => {
-          const value = String(item[columnId as keyof Item]);
-          return applyFilter(value, filter);
+          const val = (item as any)[colId];
+          return applyFilter(colId, val != null ? String(val) : '', cond);
         });
       }
     });
@@ -662,533 +682,351 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     // Apply sorting
     if (sortColumn && sortDirection) {
       result.sort((a, b) => {
-        const aValue = a[sortColumn as keyof Item];
-        const bValue = b[sortColumn as keyof Item];
+        const aVal = (a as any)[sortColumn];
+        const bVal = (b as any)[sortColumn];
 
-        const comparison = String(aValue).localeCompare(String(bValue));
-        return sortDirection === "asc" ? comparison : -comparison;
+        // Numeric sort if both numbers
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+
+        // Date sort if date column
+        if (isDateColumn(sortColumn)) {
+          const aTime = new Date(String(aVal)).getTime();
+          const bTime = new Date(String(bVal)).getTime();
+            return sortDirection === 'asc' ? aTime - bTime : bTime - aTime;
+        }
+
+        // Fallback string compare
+        const comp = String(aVal).localeCompare(String(bVal));
+        return sortDirection === 'asc' ? comp : -comp;
       });
     }
 
     return result;
-  }, [sortColumn, sortDirection, columnFilters]);
+  }, [items, columnFilters, sortColumn, sortDirection]);
 
-  // Helper to render a header cell with menu functionality
-  const renderHeaderWithMenu = (
-    columnId: string,
-    title: string
-  ): React.ReactNode => {
+  // Header cell with menu (filter panel rendered globally)
+  const HeaderCell: React.FC<{ columnId: string; title: string }> = ({ columnId, title }) => {
     return (
-      <TeachingPopover
-        open={filterPopoverOpen === columnId}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            setFilterPopoverOpen(null);
-            setFilterError('');
-          }
-        }}
-        positioning={{
-          position: 'below',
-          align: 'start',
-          offset: { crossAxis: 0, mainAxis: 12 },
-          arrowPadding: 150
-        }}
-        withArrow={true}
-      >
-        <TeachingPopoverTrigger>
-          <div style={{ display: 'inline-block', width: '100%' }}>
-            <Menu
-              open={openCol === columnId}
-              onOpenChange={(_, data) => {
-                console.log('Menu onOpenChange:', data.open, 'columnId:', columnId);
-                if (data.open) {
-                  setOpenCol(columnId);
-                } else {
-                  setOpenCol(null);
-                }
-              }}
+      <div data-column-id={columnId} style={{ width: '100%', height: '100%', display: 'flex' }}>
+        <Menu positioning={{ position: 'below', align: 'start' }}>
+          <MenuTrigger disableButtonEnhancement>
+            <Button
+              appearance="subtle"
+              size="medium"
+              style={{ padding: '6px', width: '100%', height: '100%', justifyContent: 'flex-start', display: 'flex' }}
             >
-              <MenuTrigger disableButtonEnhancement>
-                <Button
-                  appearance="subtle"
-                  size="medium"
-                  style={{
-                    padding: '6px',
-                    width: '100%',
-                    justifyContent: 'flex-start',
-                  }}
-                  onClick={() => setOpenCol(openCol === columnId ? null : columnId)}
-                >
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    columnGap: '6px',
-                    width: '100%',
-                    fontWeight: 'bold',
-                  }}>
-                    <span>{title}</span>
-                    <span>
-                      {columnFilters[columnId] && <FilterRegular style={{ color: '#0078d4' }} />}
-                      {sortColumn === columnId && sortDirection === "asc" && <ArrowSortUpRegular />}
-                      {sortColumn === columnId && sortDirection === "desc" && <ArrowSortDownRegular />}
-                      {(sortColumn !== columnId || !sortDirection) && !columnFilters[columnId] && <span />}
-                    </span>
-                    <span>
-                      <ChevronDownRegular />
-                    </span>
-                  </span>
-                </Button>
-              </MenuTrigger>
-              <MenuPopover>
-                <MenuList>
-                  <MenuItem
-                    icon={<ArrowSortUpRegular />}
-                    onClick={() => handleColumnAction(columnId, 'sort-asc')}
-                    disabled={sortColumn === columnId && sortDirection === 'asc'}
-                  >
-                    A to Z
-                  </MenuItem>
-                  <MenuItem
-                    icon={<ArrowSortDownRegular />}
-                    onClick={() => handleColumnAction(columnId, 'sort-desc')}
-                    disabled={sortColumn === columnId && sortDirection === 'desc'}
-                  >
-                    Z to A
-                  </MenuItem>
-                  {sortColumn === columnId && sortDirection && (
-                    <MenuItem
-                      icon={<DismissRegular />}
-                      onClick={() => handleColumnAction(columnId, 'clear-sort')}
-                    >
-                      Clear Sort
-                    </MenuItem>
+              <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', fontWeight: 'bold', gap: 8, justifyContent: 'flex-start' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span>{title}</span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: tokens.colorNeutralForeground1 }}>
+                  {sortColumn === columnId && sortDirection === 'asc' && <ArrowSortUpRegular aria-label="Sorted ascending" />}
+                  {sortColumn === columnId && sortDirection === 'desc' && <ArrowSortDownRegular aria-label="Sorted descending" />}
+                  {columnFilters[columnId] && <FilterRegular style={{ color: tokens.colorPaletteBlueForeground2 }} aria-label="Filtered" />}
+                  {!(sortColumn === columnId && sortDirection) && !columnFilters[columnId] && (
+                    <span style={{ width: 16, height: 16, display: 'inline-block' }} />
                   )}
-                  <MenuDivider />
-                  <MenuItem
-                    icon={<FilterRegular />}
-                    onClick={() => handleColumnAction(columnId, 'filter')}
-                  >
-                    Filter
-                  </MenuItem>
-                  {columnFilters[columnId] && (
-                    <MenuItem
-                      icon={<FilterRegular />}
-                      onClick={() => {
-                        // Clear the filter for this column
-                        setColumnFilters(prev => ({
-                          ...prev,
-                          [columnId]: null
-                        }));
-                        setOpenCol(null);
-                      }}
-                    >
-                      Clear Filter
-                    </MenuItem>
-                  )}
-                </MenuList>
-              </MenuPopover>
-            </Menu>
-          </div>
-        </TeachingPopoverTrigger>
-        <TeachingPopoverSurface>
-          <TeachingPopoverHeader icon={null}>
-            <div style={{ fontSize: '20px', fontWeight: '600' }}>Filter by</div>
-          </TeachingPopoverHeader>
-          <TeachingPopoverBody>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: '240px', padding: '8px 0' }}>
-              {/* Filter operator section */}
-              <div>
-                <div style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '8px',
-                  color: '#323130'
-                }}>
-                  Filter by operator
-                </div>
-                <Dropdown
-                  placeholder="Select filter type"
-                  value={getOperatorDisplayText(filterOperator)}
-                  onOptionSelect={(_, data) => {
-                    setFilterOperator(data.optionValue as string);
-                    setFilterError('');
-                  }}
-                  style={{ width: '100%' }}
-                  className={styles.filterOperatorDropdown}
-                  positioning={{
-                    position: 'below',
-                    align: (() => {
-                      // Check if this is the last column (rightmost)
-                      const columnIds = ['name', 'committedQty', 'committedCost', 'estimatedQty', 'estimatedCost', 'usedQty', 'usedCost', 'billingAmount', 'lineStatus', 'createdOn'];
-                      const currentColumnIndex = columnIds.indexOf(filterPopoverOpen || '');
-                      const isLastColumn = currentColumnIndex === columnIds.length - 1;
-                      return isLastColumn ? 'end' : 'start';
-                    })()
-                  }}
-                >
-                  {isDateColumn(filterPopoverOpen || '') ? (
-                    <>
-                      <Option value="on">On</Option>
-                      <Option value="on-or-after">On or after</Option>
-                      <Option value="on-or-before">On or before</Option>
-                      <Option value="today">Today</Option>
-                      <Option value="yesterday">Yesterday</Option>
-                      <Option value="tomorrow">Tomorrow</Option>
-                      <Option value="this-week">This week</Option>
-                      <Option value="this-month">This month</Option>
-                      <Option value="this-year">This year</Option>
-                      <Option value="this-fiscal-period">This fiscal period</Option>
-                      <Option value="this-fiscal-year">This fiscal year</Option>
-                      <Option value="next-week">Next week</Option>
-                      <Option value="next-7-days">Next 7 days</Option>
-                      <Option value="next-month">Next month</Option>
-                      <Option value="next-year">Next year</Option>
-                      <Option value="next-fiscal-period">Next fiscal period</Option>
-                      <Option value="next-fiscal-year">Next fiscal year</Option>
-                      <Option value="last-week">Last week</Option>
-                      <Option value="last-7-days">Last 7 days</Option>
-                      <Option value="last-month">Last month</Option>
-                      <Option value="last-year">Last year</Option>
-                      <Option value="last-fiscal-period">Last fiscal period</Option>
-                      <Option value="last-fiscal-year">Last fiscal year</Option>
-                      <Option value="contains-data-any-time">Contains data (any time)</Option>
-                      <Option value="does-not-contain-data">Does not contain data</Option>
-                    </>
-                  ) : isNumericColumn(filterPopoverOpen || '') ? (
-                    <>
-                      <Option value="equals">Equals</Option>
-                      <Option value="does-not-equal">Does not equal</Option>
-                      <Option value="contains-data">Contains data</Option>
-                      <Option value="does-not-contain-data">Does not contain data</Option>
-                      <Option value="greater-than">Greater than</Option>
-                      <Option value="greater-than-or-equal-to">Greater than or equal to</Option>
-                      <Option value="less-than">Less than</Option>
-                      <Option value="less-than-or-equal-to">Less than or equal to</Option>
-                    </>
-                  ) : (
-                    <>
-                      <Option value="equals">Equals</Option>
-                      <Option value="does-not-equal">Does not equal</Option>
-                      <Option value="contains-data">Contains data</Option>
-                      <Option value="does-not-contain-data">Does not contain data</Option>
-                      <Option value="contains">Contains</Option>
-                      <Option value="does-not-contain">Does not contain</Option>
-                      <Option value="begins-with">Begins with</Option>
-                      <Option value="does-not-begin-with">Does not begin with</Option>
-                      <Option value="ends-with">Ends with</Option>
-                      <Option value="does-not-end-with">Does not end with</Option>
-                    </>
-                  )}
-                </Dropdown>
-              </div>
-
-              {/* Filter value section - only show if operator requires input */}
-              {!shouldHideValueInput(filterOperator) && (
-                <div>
-                  <div style={{
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    marginBottom: '8px',
-                    color: '#323130'
-                  }}>
-                    Filter by value
-                  </div>
-                  {requiresDatePicker(filterOperator) ? (
-                  <DatePicker
-                    placeholder="Select a date"
-                    value={filterValue ? new Date(filterValue + 'T00:00:00') : null}
-                    onSelectDate={(date) => {
-                      setFilterValue(date ? date.toISOString().split('T')[0] : '');
-                      setFilterError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        // Validate input for operators that require values
-                        if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
-                          setFilterError('Please enter a value');
-                          return;
-                        }
-
-                        // Apply the filter (same logic as Apply button)
-                        setColumnFilters(prev => ({
-                          ...prev,
-                          [filterPopoverOpen!]: {
-                            operator: filterOperator as FilterOperator,
-                            value: filterValue
-                          }
-                        }));
-
-                        setFilterPopoverOpen(null);
-                        setFilterError('');
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      border: filterError ? '2px solid #d13438' : undefined
-                    }}
-                  />
-                ) : requiresNumericInput(filterOperator) ? (
-                  <Input
-                    type="number"
-                    placeholder="Enter number"
-                    value={filterValue}
-                    onChange={(_, data) => {
-                      setFilterValue(data.value);
-                      setFilterError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        // Validate input for operators that require values
-                        if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
-                          setFilterError('Please enter a value');
-                          return;
-                        }
-
-                        // Apply the filter (same logic as Apply button)
-                        setColumnFilters(prev => ({
-                          ...prev,
-                          [filterPopoverOpen!]: {
-                            operator: filterOperator as FilterOperator,
-                            value: filterValue
-                          }
-                        }));
-
-                        setFilterPopoverOpen(null);
-                        setFilterError('');
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      border: filterError ? '2px solid #d13438' : undefined
-                    }}
-                  />
-                ) : (
-                  <Input
-                    placeholder=""
-                    value={filterValue}
-                    onChange={(_, data) => {
-                      setFilterValue(data.value);
-                      setFilterError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        // Validate input for operators that require values
-                        if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
-                          setFilterError('Please enter a value');
-                          return;
-                        }
-
-                        // Apply the filter (same logic as Apply button)
-                        setColumnFilters(prev => ({
-                          ...prev,
-                          [filterPopoverOpen!]: {
-                            operator: filterOperator as FilterOperator,
-                            value: filterValue
-                          }
-                        }));
-
-                        setFilterPopoverOpen(null);
-                        setFilterError('');
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      border: filterError ? '2px solid #d13438' : undefined
-                    }}
-                  />
-                )}
-                {filterError && (
-                  <div style={{
-                    color: '#d13438',
-                    fontSize: '12px',
-                    marginTop: '4px'
-                  }}>
-                    {filterError}
-                  </div>
-                )}
-              </div>
+                  <ChevronDownRegular />
+                </span>
+              </span>
+            </Button>
+          </MenuTrigger>
+          <MenuPopover style={{ zIndex: 1000, background: 'rgba(255,255,255,0.95)' }}>
+            <MenuList>
+              <MenuItem icon={<ArrowSortUpRegular />} onClick={() => handleColumnAction(columnId, 'sort-asc')} disabled={sortColumn === columnId && sortDirection === 'asc'}>A to Z</MenuItem>
+              <MenuItem icon={<ArrowSortDownRegular />} onClick={() => handleColumnAction(columnId, 'sort-desc')} disabled={sortColumn === columnId && sortDirection === 'desc'}>Z to A</MenuItem>
+              {sortColumn === columnId && sortDirection && (
+                <MenuItem icon={<DismissRegular />} onClick={() => handleColumnAction(columnId, 'clear-sort')}>Clear Sort</MenuItem>
               )}
-
-              {/* Action buttons */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                justifyContent: 'flex-end'
-              }}>
-                <Button
-                  size="large"
-                  appearance="primary"
-                  shape="square"
+              <MenuDivider />
+              <MenuItem icon={<FilterRegular />} onClick={() => handleColumnAction(columnId, 'filter')}>Filter</MenuItem>
+              {columnFilters[columnId] && (
+                <MenuItem
+                  icon={<FilterRegular />}
                   onClick={() => {
-                    // Validate input for operators that require values
-                    if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
-                      setFilterError('Please enter a value');
-                      return;
-                    }
-
-                    // Apply the filter
-                    setColumnFilters(prev => ({
-                      ...prev,
-                      [columnId]: {
-                        operator: filterOperator as FilterOperator,
-                        value: filterValue
-                      }
-                    }));
-
-                    setFilterPopoverOpen(null);
-                    setFilterError('');
+                    setColumnFilters(prev => ({ ...prev, [columnId]: null }));
+                    // menu closes automatically
                   }}
                 >
-                  Apply
-                </Button>
-                <Button
-                  size="large"
-                  appearance="secondary"
-                  shape="square"
-                  onClick={() => {
-                    setFilterValue('');
-                    setFilterError('');
-                    setFilterPopoverOpen(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </TeachingPopoverBody>
-        </TeachingPopoverSurface>
-      </TeachingPopover>
+                  Clear Filter
+                </MenuItem>
+              )}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      </div>
     );
   };
 
-  // Define columns inside component so they can access renderHeaderWithMenu
-  const columns = [
+  // DebugMenu removed after verification
+
+  // Global filter panel (portal-style) rendered once
+  const GlobalFilterPanel: React.FC = () => {
+    if (!filterPopoverOpen || !filterAnchor) return null;
+    const columnId = filterPopoverOpen;
+    const columnIds = ['name', 'committedQty', 'committedCost', 'estimatedQty', 'estimatedCost', 'usedQty', 'usedCost', 'billingAmount', 'lineStatus', 'createdOn'];
+    const currentColumnIndex = columnIds.indexOf(columnId);
+    const isLastColumn = currentColumnIndex === columnIds.length - 1;
+    const valueInputRef = React.useRef<HTMLInputElement | HTMLDivElement | null>(null);
+    const commitFilter = () => {
+      if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
+        setFilterError('Please enter a value');
+        return;
+      }
+      setColumnFilters(prev => ({ ...prev, [columnId]: { operator: filterOperator as FilterOperator, value: filterValue } }));
+      setFilterPopoverOpen(null);
+      setFilterError('');
+    };
+    // Re-focus value input after each state change that causes re-render
+    React.useEffect(() => {
+      if (!shouldHideValueInput(filterOperator) && valueInputRef.current) {
+        // For DatePicker we don't directly get the input element, attempt to query inside
+        const el = (valueInputRef.current as HTMLElement).querySelector?.('input') as HTMLInputElement | null;
+        (el ?? (valueInputRef.current as HTMLInputElement | null))?.focus();
+        (el ?? (valueInputRef.current as HTMLInputElement | null))?.setSelectionRange?.(filterValue.length, filterValue.length);
+      }
+    }, [filterPopoverOpen, filterOperator, filterValue]);
+    const onKeyDownRoot: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitFilter();
+      } else if (e.key === 'Escape') {
+        setFilterPopoverOpen(null);
+      }
+    };
+    return (
+      <div onKeyDown={onKeyDownRoot} style={{ position: 'fixed', top: filterAnchor.bottom + 4, left: isLastColumn ? undefined : filterAnchor.left, right: isLastColumn ? (window.innerWidth - filterAnchor.right) : undefined, zIndex: 3000, background: '#fff', border: `1px solid ${tokens.colorNeutralStroke1}`, boxShadow: tokens.shadow16, borderRadius: 4, padding: 12, minWidth: 260 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Filter by</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 240 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#323130' }}>Filter by operator</div>
+            <Dropdown
+              placeholder="Select filter type"
+              value={getOperatorDisplayText(filterOperator)}
+              onOptionSelect={(_, data) => {
+                setFilterOperator(data.optionValue as string);
+                setFilterError('');
+              }}
+              style={{ width: '100%' }}
+              listbox={{ className: styles.filterOperatorDropdownListBox }}
+              positioning={{ position: 'below', align: isLastColumn ? 'end' : 'start' }}
+            >
+              {isDateColumn(columnId) ? (
+                <>
+                  <Option value="on">On</Option>
+                  <Option value="on-or-after">On or after</Option>
+                  <Option value="on-or-before">On or before</Option>
+                  <Option value="today">Today</Option>
+                  <Option value="yesterday">Yesterday</Option>
+                  <Option value="tomorrow">Tomorrow</Option>
+                  <Option value="this-week">This week</Option>
+                  <Option value="this-month">This month</Option>
+                  <Option value="this-year">This year</Option>
+                  <Option value="next-week">Next week</Option>
+                  <Option value="next-month">Next month</Option>
+                  <Option value="next-year">Next year</Option>
+                  <Option value="last-week">Last week</Option>
+                  <Option value="last-month">Last month</Option>
+                  <Option value="last-year">Last year</Option>
+                  <Option value="contains-data-any-time">Contains data (any time)</Option>
+                  <Option value="does-not-contain-data">Does not contain data</Option>
+                </>
+              ) : isNumericColumn(columnId) ? (
+                <>
+                  <Option value="equals">Equals</Option>
+                  <Option value="does-not-equal">Does not equal</Option>
+                  <Option value="contains-data">Contains data</Option>
+                  <Option value="does-not-contain-data">Does not contain data</Option>
+                  <Option value="greater-than">Greater than</Option>
+                  <Option value="greater-than-or-equal-to">Greater than or equal to</Option>
+                  <Option value="less-than">Less than</Option>
+                  <Option value="less-than-or-equal-to">Less than or equal to</Option>
+                </>
+              ) : (
+                <>
+                  <Option value="equals">Equals</Option>
+                  <Option value="does-not-equal">Does not equal</Option>
+                  <Option value="contains-data">Contains data</Option>
+                  <Option value="does-not-contain-data">Does not contain data</Option>
+                  <Option value="contains">Contains</Option>
+                  <Option value="does-not-contain">Does not contain</Option>
+                  <Option value="begins-with">Begins with</Option>
+                  <Option value="does-not-begin-with">Does not begin with</Option>
+                  <Option value="ends-with">Ends with</Option>
+                  <Option value="does-not-end-with">Does not end with</Option>
+                </>
+              )}
+            </Dropdown>
+          </div>
+          {!shouldHideValueInput(filterOperator) && (
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#323130' }}>Filter by value</div>
+              {requiresDatePicker(filterOperator) ? (
+                <DatePicker
+                  // wrapper div will host ref for focus attempt
+                  ref={valueInputRef as any}
+                  placeholder="Select a date"
+                  value={filterValue ? new Date(filterValue + 'T00:00:00') : null}
+                  onSelectDate={(date) => {
+                    setFilterValue(date ? date.toISOString().split('T')[0] : '');
+                    setFilterError('');
+                  }}
+                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
+                />
+              ) : requiresNumericInput(filterOperator) ? (
+                <Input
+                  type="number"
+                  placeholder="Enter number"
+                  value={filterValue}
+                  onChange={(_, data) => { setFilterValue(data.value); setFilterError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitFilter(); } }}
+                  ref={valueInputRef as any}
+                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
+                />
+              ) : (
+                <Input
+                  placeholder=""
+                  value={filterValue}
+                  onChange={(_, data) => { setFilterValue(data.value); setFilterError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitFilter(); } }}
+                  ref={valueInputRef as any}
+                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
+                />
+              )}
+              {filterError && <div style={{ color: '#d13438', fontSize: 12, marginTop: 4 }}>{filterError}</div>}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button
+              size="large"
+              appearance="primary"
+              shape="square"
+              onClick={commitFilter}
+            >Apply</Button>
+            <Button
+              size="large"
+              appearance="secondary"
+              shape="square"
+              onClick={() => { setFilterValue(''); setFilterError(''); setFilterPopoverOpen(null); }}
+            >Cancel</Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Stable column definitions to prevent width reset during header interaction
+  const columns = React.useMemo(() => [
     createTableColumn<Item>({
       columnId: 'name',
-      compare: (a, b) => {
-        return a.name.localeCompare(b.name);
-      },
+      compare: (a, b) => a.name.localeCompare(b.name),
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('name', 'Name')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="name" title="Name" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.name}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.name}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'committedQty',
-      compare: (a, b) => {
-        return a.committedQty - b.committedQty;
-      },
+      compare: (a, b) => a.committedQty - b.committedQty,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('committedQty', 'Committed Qty')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="committedQty" title="Committed Qty" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.committedQty}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.committedQty}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'committedCost',
-      compare: (a, b) => {
-        return a.committedCost - b.committedCost;
-      },
+      compare: (a, b) => a.committedCost - b.committedCost,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('committedCost', 'Committed Cost')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="committedCost" title="Committed Cost" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.committedCost}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.committedCost}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'estimatedQty',
-      compare: (a, b) => {
-        return a.estimatedQty - b.estimatedQty;
-      },
+      compare: (a, b) => a.estimatedQty - b.estimatedQty,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('estimatedQty', 'Estimated Qty')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="estimatedQty" title="Estimated Qty" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => {
-        if (item.estimatedQty === 0) return <DataGridCell style={{ minWidth: '150px' }}>{item.estimatedQty}</DataGridCell>;
-        else {
-          return <DataGridCell style={{ minWidth: '150px' }}><div>{item.estimatedQty}</div></DataGridCell>;
-        }
-      },
+      renderCell: (item) =>
+        item.estimatedQty === 0 ? (
+          <DataGridCell>{item.estimatedQty}</DataGridCell>
+        ) : (
+          <DataGridCell>
+            <div>{item.estimatedQty}</div>
+          </DataGridCell>
+        ),
     }),
     createTableColumn<Item>({
       columnId: 'estimatedCost',
-      compare: (a, b) => {
-        return a.estimatedCost - b.estimatedCost;
-      },
+      compare: (a, b) => a.estimatedCost - b.estimatedCost,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('estimatedCost', 'Estimated Cost')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="estimatedCost" title="Estimated Cost" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.estimatedCost}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.estimatedCost}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'usedQty',
-      compare: (a, b) => {
-        return a.usedQty - b.usedQty;
-      },
+      compare: (a, b) => a.usedQty - b.usedQty,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('usedQty', 'Used Qty')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="usedQty" title="Used Qty" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.usedQty}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.usedQty}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'usedCost',
-      compare: (a, b) => {
-        return a.usedCost - b.usedCost;
-      },
+      compare: (a, b) => a.usedCost - b.usedCost,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('usedCost', 'Used Cost')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="usedCost" title="Used Cost" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.usedCost}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.usedCost}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'billingAmount',
-      compare: (a, b) => {
-        return a.billingAmount - b.billingAmount;
-      },
+      compare: (a, b) => a.billingAmount - b.billingAmount,
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('billingAmount', 'Billing Amount')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="billingAmount" title="Billing Amount" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.billingAmount}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.billingAmount}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'lineStatus',
-      compare: (a, b) => {
-        return a.lineStatus.localeCompare(b.lineStatus);
-      },
+      compare: (a, b) => a.lineStatus.localeCompare(b.lineStatus),
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('lineStatus', 'Line Status')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="lineStatus" title="Line Status" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.lineStatus}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.lineStatus}</DataGridCell>,
     }),
     createTableColumn<Item>({
       columnId: 'createdOn',
-      compare: (a, b) => {
-        return a.createdOn.localeCompare(b.createdOn);
-      },
+      compare: (a, b) => a.createdOn.localeCompare(b.createdOn),
       renderHeaderCell: () => (
-        <DataGridHeaderCell style={{ minWidth: '150px' }}>
-          {renderHeaderWithMenu('createdOn', 'Created On')}
+        <DataGridHeaderCell className={styles.gridCell}>
+          <HeaderCell columnId="createdOn" title="Created On" />
         </DataGridHeaderCell>
       ),
-      renderCell: (item) => <DataGridCell style={{ minWidth: '150px' }}>{item.createdOn}</DataGridCell>,
+      renderCell: (item) => <DataGridCell>{item.createdOn}</DataGridCell>,
     }),
-  ];
+  ], [sortColumn, sortDirection, columnFilters]);
 
   const toolbarStyle = {
     marginBottom: tokens.spacingVerticalL,
@@ -1207,6 +1045,8 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
     }
   }
 
+  // Insert DebugMenu in JSX return (search for DataGrid usage below)
+
   const renderRow = React.useMemo<RowRenderer<Item>>(
     () =>
       ({ item, rowId }, style, _, isScrolling) =>
@@ -1220,9 +1060,8 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
                   : '';
               return (
                 <DataGridCell
-                  className={backgroundClass}
+                  className={backgroundClass ? styles.estimateQuantity : styles.gridCell}
                   focusMode="group"
-                  style={{ width: '175px' }}
                 >
                   {isScrolling ? <CellShimmer /> : renderCell(item)}
                 </DataGridCell>
@@ -1236,6 +1075,8 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
   return (
     <FluentProvider theme={props.currentTheme}>
       <div className={styles.main}>
+  {/* DebugMenu removed */}
+        <GlobalFilterPanel />
         <section className={styles.section}>
           <div className={styles.container}>
             <div className={styles.box}>
@@ -1364,19 +1205,16 @@ export const Orientation: React.FC<ContentProps> = (props): JSXElement => {
               // sortable
               selectionMode="single"
               // resizableColumns={false}
-              resizableColumns
+              resizableColumns={true}
               resizableColumnsOptions={{
                 autoFitColumns: false,
               }}
+              columnSizingOptions={columnSizingOptions}
               subtleSelection
             >
               <DataGridHeader style={{ paddingRight: scrollbarWidth }}>
                 <DataGridRow>
-                  {({ renderHeaderCell }) => (
-                    <DataGridHeaderCell style={{ minWidth: '175px', height: '50px' }}>
-                      {renderHeaderCell()}
-                    </DataGridHeaderCell>
-                  )}
+                  {({ renderHeaderCell }) => renderHeaderCell()}
                 </DataGridRow>
               </DataGridHeader>
               <DataGridBody<Item>
