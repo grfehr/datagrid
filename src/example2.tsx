@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { DatePicker } from '@fluentui/react-datepicker-compat';
 import {
   Card,
   CardHeader,
@@ -19,10 +18,6 @@ import {
   Skeleton,
   SkeletonItem,
   Theme,
-  Dropdown,
-  Option,
-  Input,
-  Button,
 } from '@fluentui/react-components';
 import { DataGridBody, DataGrid, DataGridRow, DataGridHeader, DataGridCell, DataGridHeaderCell, RowRenderer } from '@fluentui-contrib/react-data-grid-react-window';
 import {
@@ -32,6 +27,7 @@ import {
 } from '@fluentui/react-icons';
 
 import { HeaderCell } from './HeaderCell';
+import { GlobalFilterPanel } from './GlobalFilterPanel';
 
 export interface ContentProps {
   lightTheme: Theme;
@@ -332,9 +328,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
   const [filterAnchor, setFilterAnchor] = React.useState<DOMRect | null>(null);
 
   // Filter form state
-  const [filterOperator, setFilterOperator] = React.useState('equals');
-  const [filterValue, setFilterValue] = React.useState('');
-  const [filterError, setFilterError] = React.useState('');
+  // Filter operator/value state moved inside GlobalFilterPanel component
 
   // Sort state - only one column can be sorted at a time
   const [sortColumn, setSortColumn] = React.useState<string | null>(null);
@@ -343,22 +337,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
   // Filter state - track filters for each column
   const [columnFilters, setColumnFilters] = React.useState<ColumnFilters>({});
 
-  // Initialize filter form when opening filter popover
-  React.useEffect(() => {
-    if (filterPopoverOpen) {
-      const currentFilter = columnFilters[filterPopoverOpen];
-      if (currentFilter) {
-        setFilterOperator(currentFilter.operator);
-        setFilterValue(currentFilter.value);
-      } else {
-        // Default to 'on' for date columns, 'equals' for other columns
-        const defaultOperator = isDateColumn(filterPopoverOpen) ? 'on' : 'equals';
-        setFilterOperator(defaultOperator);
-        setFilterValue('');
-      }
-      setFilterError('');
-    }
-  }, [filterPopoverOpen, columnFilters]);
+  // (Filter operator/value initialization now handled inside GlobalFilterPanel)
 
   // Capture anchor rect for global filter panel when opening
   React.useEffect(() => {
@@ -783,161 +762,6 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
 
   // DebugMenu removed after verification
 
-  // Global filter panel (portal-style) rendered once
-  const GlobalFilterPanel: React.FC = () => {
-    if (!filterPopoverOpen || !filterAnchor) return null;
-    const columnId = filterPopoverOpen;
-    const columnIds = ['name', 'committedQty', 'committedCost', 'estimatedQty', 'estimatedCost', 'usedQty', 'usedCost', 'billingAmount', 'lineStatus', 'createdOn'];
-    const currentColumnIndex = columnIds.indexOf(columnId);
-    const isLastColumn = currentColumnIndex === columnIds.length - 1;
-    const valueInputRef = React.useRef<HTMLInputElement | HTMLDivElement | null>(null);
-    const commitFilter = () => {
-      if (!shouldHideValueInput(filterOperator) && !filterValue.trim()) {
-        setFilterError('Please enter a value');
-        return;
-      }
-      setColumnFilters(prev => ({ ...prev, [columnId]: { operator: filterOperator as FilterOperator, value: filterValue } }));
-      setFilterPopoverOpen(null);
-      setFilterError('');
-    };
-    // Re-focus value input after each state change that causes re-render
-    React.useEffect(() => {
-      if (!shouldHideValueInput(filterOperator) && valueInputRef.current) {
-        // For DatePicker we don't directly get the input element, attempt to query inside
-        const el = (valueInputRef.current as HTMLElement).querySelector?.('input') as HTMLInputElement | null;
-        (el ?? (valueInputRef.current as HTMLInputElement | null))?.focus();
-        (el ?? (valueInputRef.current as HTMLInputElement | null))?.setSelectionRange?.(filterValue.length, filterValue.length);
-      }
-    }, [filterPopoverOpen, filterOperator, filterValue]);
-    const onKeyDownRoot: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        commitFilter();
-      } else if (e.key === 'Escape') {
-        setFilterPopoverOpen(null);
-      }
-    };
-    return (
-      <div onKeyDown={onKeyDownRoot} style={{ position: 'fixed', top: filterAnchor.bottom + 4, left: isLastColumn ? undefined : filterAnchor.left, right: isLastColumn ? (window.innerWidth - filterAnchor.right) : undefined, zIndex: 3000, background: '#fff', border: `1px solid ${tokens.colorNeutralStroke1}`, boxShadow: tokens.shadow16, borderRadius: 4, padding: 12, minWidth: 260 }}>
-        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Filter by</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 240 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#323130' }}>Filter by operator</div>
-            <Dropdown
-              placeholder="Select filter type"
-              value={getOperatorDisplayText(filterOperator)}
-              onOptionSelect={(_, data) => {
-                setFilterOperator(data.optionValue as string);
-                setFilterError('');
-              }}
-              style={{ width: '100%' }}
-              listbox={{ className: styles.filterOperatorDropdownListBox }}
-              positioning={{ position: 'below', align: isLastColumn ? 'end' : 'start' }}
-            >
-              {isDateColumn(columnId) ? (
-                <>
-                  <Option value="on">On</Option>
-                  <Option value="on-or-after">On or after</Option>
-                  <Option value="on-or-before">On or before</Option>
-                  <Option value="today">Today</Option>
-                  <Option value="yesterday">Yesterday</Option>
-                  <Option value="tomorrow">Tomorrow</Option>
-                  <Option value="this-week">This week</Option>
-                  <Option value="this-month">This month</Option>
-                  <Option value="this-year">This year</Option>
-                  <Option value="next-week">Next week</Option>
-                  <Option value="next-month">Next month</Option>
-                  <Option value="next-year">Next year</Option>
-                  <Option value="last-week">Last week</Option>
-                  <Option value="last-month">Last month</Option>
-                  <Option value="last-year">Last year</Option>
-                  <Option value="contains-data-any-time">Contains data (any time)</Option>
-                  <Option value="does-not-contain-data">Does not contain data</Option>
-                </>
-              ) : isNumericColumn(columnId) ? (
-                <>
-                  <Option value="equals">Equals</Option>
-                  <Option value="does-not-equal">Does not equal</Option>
-                  <Option value="contains-data">Contains data</Option>
-                  <Option value="does-not-contain-data">Does not contain data</Option>
-                  <Option value="greater-than">Greater than</Option>
-                  <Option value="greater-than-or-equal-to">Greater than or equal to</Option>
-                  <Option value="less-than">Less than</Option>
-                  <Option value="less-than-or-equal-to">Less than or equal to</Option>
-                </>
-              ) : (
-                <>
-                  <Option value="equals">Equals</Option>
-                  <Option value="does-not-equal">Does not equal</Option>
-                  <Option value="contains-data">Contains data</Option>
-                  <Option value="does-not-contain-data">Does not contain data</Option>
-                  <Option value="contains">Contains</Option>
-                  <Option value="does-not-contain">Does not contain</Option>
-                  <Option value="begins-with">Begins with</Option>
-                  <Option value="does-not-begin-with">Does not begin with</Option>
-                  <Option value="ends-with">Ends with</Option>
-                  <Option value="does-not-end-with">Does not end with</Option>
-                </>
-              )}
-            </Dropdown>
-          </div>
-          {!shouldHideValueInput(filterOperator) && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#323130' }}>Filter by value</div>
-              {requiresDatePicker(filterOperator) ? (
-                <DatePicker
-                  // wrapper div will host ref for focus attempt
-                  ref={valueInputRef as any}
-                  placeholder="Select a date"
-                  value={filterValue ? new Date(filterValue + 'T00:00:00') : null}
-                  onSelectDate={(date) => {
-                    setFilterValue(date ? date.toISOString().split('T')[0] : '');
-                    setFilterError('');
-                  }}
-                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
-                />
-              ) : requiresNumericInput(filterOperator) ? (
-                <Input
-                  type="number"
-                  placeholder="Enter number"
-                  value={filterValue}
-                  onChange={(_, data) => { setFilterValue(data.value); setFilterError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitFilter(); } }}
-                  ref={valueInputRef as any}
-                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
-                />
-              ) : (
-                <Input
-                  placeholder=""
-                  value={filterValue}
-                  onChange={(_, data) => { setFilterValue(data.value); setFilterError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitFilter(); } }}
-                  ref={valueInputRef as any}
-                  style={{ width: '100%', border: filterError ? '2px solid #d13438' : undefined }}
-                />
-              )}
-              {filterError && <div style={{ color: '#d13438', fontSize: 12, marginTop: 4 }}>{filterError}</div>}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Button
-              size="large"
-              appearance="primary"
-              shape="square"
-              onClick={commitFilter}
-            >Apply</Button>
-            <Button
-              size="large"
-              appearance="secondary"
-              shape="square"
-              onClick={() => { setFilterValue(''); setFilterError(''); setFilterPopoverOpen(null); }}
-            >Cancel</Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // Stable column definitions to prevent width reset during header interaction
   const columns = React.useMemo(() =>
     columnOrder.map((colId) =>
@@ -998,7 +822,19 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
     <FluentProvider theme={props.currentTheme}>
       <div className={styles.main}>
   {/* DebugMenu removed */}
-        <GlobalFilterPanel />
+        <GlobalFilterPanel
+          openColumnId={filterPopoverOpen}
+          anchorRect={filterAnchor}
+          setOpenColumnId={setFilterPopoverOpen}
+          columnFilters={columnFilters as any}
+          setColumnFilters={setColumnFilters as any}
+          isDateColumn={isDateColumn}
+          isNumericColumn={isNumericColumn}
+          getOperatorDisplayText={getOperatorDisplayText}
+          requiresDatePicker={requiresDatePicker}
+          requiresNumericInput={requiresNumericInput}
+          shouldHideValueInput={shouldHideValueInput}
+        />
         <section className={styles.section}>
           <div className={styles.container}>
             <div className={styles.box}>
