@@ -172,8 +172,8 @@ const items = new Array(120)
   .fill(0)
   .map((_, i) => ({ ...baseItems[i % baseItems.length], index: i }));
 
-// Column sizing options applied to all columns instead of inline minWidth styles
-const columnSizingOptions: TableColumnSizingOptions = {
+// Base column sizing template applied to all columns instead of inline minWidth styles
+const baseColumnSizingTemplate: TableColumnSizingOptions = {
   name: {
     minWidth: 175,
     idealWidth: 200,
@@ -249,6 +249,55 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
   const styles = useStyles();
   const { targetDocument } = useFluent();
   const scrollbarWidth = useScrollbarWidth({ targetDocument });
+  const gridRootRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Column sizing state with persistence
+  const [columnSizingOptions, setColumnSizingOptions] = React.useState<TableColumnSizingOptions>(() => {
+    try {
+      const saved = localStorage.getItem('example2GridColumnWidths');
+      if (saved) {
+        const savedWidths: Record<string, number> = JSON.parse(saved);
+        const merged: TableColumnSizingOptions = { ...baseColumnSizingTemplate };
+        Object.entries(savedWidths).forEach(([col, width]) => {
+          if (!merged[col]) return;
+          const min = (merged[col] as any)?.minWidth ?? 40;
+          const clamped = Math.max(min, width || 0);
+          if (clamped && clamped !== (merged[col] as any).defaultWidth) {
+            merged[col] = { ...merged[col], defaultWidth: clamped, idealWidth: clamped } as any;
+          }
+        });
+        return merged;
+      }
+    } catch {
+      // ignore
+    }
+    return baseColumnSizingTemplate;
+  });
+
+  // Keep a ref of current widths for debounced persistence
+  const widthCacheRef = React.useRef<Record<string, number>>({});
+  const initializedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!initializedRef.current) {
+      Object.entries(columnSizingOptions).forEach(([col, opts]) => {
+        if (opts?.defaultWidth) widthCacheRef.current[col] = opts.defaultWidth as number;
+      });
+      initializedRef.current = true;
+    }
+  }, [columnSizingOptions]);
+
+  // Debounce handle
+  const persistTimerRef = React.useRef<number | null>(null);
+  const schedulePersist = React.useCallback(() => {
+    if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem('example2GridColumnWidths', JSON.stringify(widthCacheRef.current));
+      } catch { /* ignore */ }
+    }, 300);
+  }, []);
+
+  // (ResizeObserver effect moved below columnOrder state)
 
 
   // Track which filter popover is open
@@ -621,6 +670,24 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
     localStorage.setItem('example2GridColumnOrder', JSON.stringify(columnOrder));
   }, [columnOrder]);
 
+  // Remove ResizeObserver approach; rely on DataGrid onColumnResize event
+
+  const handleColumnResize = React.useCallback((_: any, data: { columnId: string | number; width: number }) => {
+    if (!data || data.width == null) return;
+    const rawId = data.columnId;
+    const columnId = String(rawId);
+    const minWidth = (baseColumnSizingTemplate as any)[columnId]?.minWidth ?? 40;
+    const clamped = Math.max(minWidth, Math.round(data.width));
+    const prev = widthCacheRef.current[columnId];
+    if (typeof prev === 'number' && Math.abs(prev - clamped) < 2) return; // ignore jitter
+    widthCacheRef.current[columnId] = clamped;
+    setColumnSizingOptions(prevOpts => {
+      if (!prevOpts[columnId]) return prevOpts;
+      return { ...prevOpts, [columnId]: { ...prevOpts[columnId], defaultWidth: clamped, idealWidth: clamped } as any };
+    });
+    schedulePersist();
+  }, [schedulePersist]);
+
   // Map of columnId to column config
   const columnConfig: Record<string, { title: string; compare: (a: Item, b: Item) => number; renderCell: (item: Item) => React.ReactNode }> = {
     name: {
@@ -885,6 +952,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
               </div>
             </Toolbar>
 
+            <div ref={gridRootRef}>
             <DataGrid
               items={filteredAndSortedItems}
               columns={columns}
@@ -897,6 +965,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
                 autoFitColumns: false,
               }}
               columnSizingOptions={columnSizingOptions}
+              onColumnResize={handleColumnResize}
               subtleSelection
             >
               <DataGridHeader style={{ paddingRight: scrollbarWidth }}>
@@ -912,6 +981,7 @@ export const Orientation: React.FC<ContentProps> = (props): JSX.Element => {
                 {renderRow}
               </DataGridBody>
             </DataGrid>
+            </div>
           </div>
         </section>
       </div>
