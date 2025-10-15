@@ -12,12 +12,23 @@ import {
   ArrowSortUpRegular,
   ArrowSortDownRegular,
   ChevronDownRegular,
-  FilterRegular,
   DismissRegular,
   ArrowLeftRegular,
   ArrowRightRegular,
-  FilterDismissRegular,
 } from '@fluentui/react-icons';
+import { TbFilter as TbFilterIcon, TbFilterMinus as TbFilterMinusIcon } from 'react-icons/tb';
+
+// Wrappers to ensure proper JSX.Element return type under current TS/React versions
+const FilterIcon: React.FC<{ color?: string; size?: number }> = ({ color, size = 16 }) => (
+  <span style={{ lineHeight: 0, display: 'inline-flex' }}>
+    <TbFilterIcon size={size as any} color={color} />
+  </span>
+);
+const FilterMinusIcon: React.FC<{ color?: string; size?: number }> = ({ color, size = 16 }) => (
+  <span style={{ lineHeight: 0, display: 'inline-flex' }}>
+    <TbFilterMinusIcon size={size as any} color={color} />
+  </span>
+);
 
 interface HeaderCellProps {
   columnId: string;
@@ -69,7 +80,7 @@ export const HeaderCell: React.FC<HeaderCellProps> = ({
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: tokens.colorNeutralForeground1 }}>
                 {sortColumn === columnId && sortDirection === 'asc' && <ArrowSortUpRegular aria-label="Sorted ascending" />}
                 {sortColumn === columnId && sortDirection === 'desc' && <ArrowSortDownRegular aria-label="Sorted descending" />}
-                {columnFilters[columnId] && <FilterRegular style={{ color: tokens.colorPaletteBlueForeground2 }} aria-label="Filtered" />}
+                {columnFilters[columnId] && <FilterIcon color={tokens.colorPaletteBlueForeground2} />}
                 {!(sortColumn === columnId && sortDirection) && !columnFilters[columnId] && (
                   <span style={{ width: 16, height: 16, display: 'inline-block' }} />
                 )}
@@ -86,10 +97,10 @@ export const HeaderCell: React.FC<HeaderCellProps> = ({
               <MenuItem icon={<DismissRegular />} onClick={() => handleColumnAction(columnId, 'clear-sort')}>Clear Sort</MenuItem>
             )}
             <MenuDivider />
-            <MenuItem icon={<FilterRegular />} onClick={() => handleColumnAction(columnId, 'filter')}>Filter</MenuItem>
+            <MenuItem icon={<FilterIcon />} onClick={() => handleColumnAction(columnId, 'filter')}>Filter</MenuItem>
             {columnFilters[columnId] && (
               <MenuItem
-                icon={<FilterDismissRegular />}
+                icon={<FilterMinusIcon />}
                 onClick={() => {
                   setColumnFilters(prev => ({ ...prev, [columnId]: null }));
                 }}

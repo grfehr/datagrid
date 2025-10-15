@@ -18,8 +18,8 @@
     "react-icons": "latest"
   },
   "devDependencies": {
-    "@types/react": "^17",
-    "@types/react-dom": "^17",
+  "@types/react": "^18",
+  "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.2.0",
     "typescript": "~4.7.0",
     "vite": "^5.0.0"
