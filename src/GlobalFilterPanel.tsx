@@ -124,8 +124,22 @@ export const GlobalFilterPanel: React.FC<GlobalFilterPanelProps> = ({
 
   if (!filterPopoverOpen || !filterAnchor) return null;
 
+  // Calculate beak horizontal position (within panel) relative to anchor
+  // Panel left coordinate (if using left) else compute from right alignment
+  let panelLeft = isLastColumn ? undefined : filterAnchor.left;
+  const panelRight = isLastColumn ? (window.innerWidth - filterAnchor.right) : undefined;
+  const panelWidth = 260; // minimum; will grow with content but good baseline
+  // If left aligned: beakX = anchor center - panelLeft
+  const anchorCenterX = filterAnchor.left + filterAnchor.width / 2;
+  let beakLeft: number | undefined;
+  if (panelLeft !== undefined) {
+    beakLeft = anchorCenterX - panelLeft;
+    // Clamp to panel bounds
+    beakLeft = Math.min(Math.max(12, beakLeft), panelWidth - 12);
+  }
+  // Restore original tight placement (no beak)
   return (
-    <div onKeyDown={onKeyDownRoot} style={{ position: 'fixed', top: filterAnchor.bottom + 4, left: isLastColumn ? undefined : filterAnchor.left, right: isLastColumn ? (window.innerWidth - filterAnchor.right) : undefined, zIndex: 3000, background: '#fff', border: `1px solid ${tokens.colorNeutralStroke1}`, boxShadow: tokens.shadow16, borderRadius: 4, padding: 12, minWidth: 260 }}>
+    <div onKeyDown={onKeyDownRoot} style={{ position: 'fixed', top: filterAnchor.bottom + 4, left: panelLeft, right: panelRight, zIndex: 3000, background: '#fff', border: `1px solid ${tokens.colorNeutralStroke1}`, boxShadow: tokens.shadow16, borderRadius: 4, padding: 12, minWidth: 260 }}>
       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Filter by</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 240 }}>
         <div>
